@@ -3,11 +3,12 @@
 > **Инструмент для создания и управления mock API эндпоинтами с современным веб-интерфейсом**
 
 Mock Service позволяет быстро создавать имитации API для тестирования, разработки и демонстрации приложений. Поддерживает REST, SOAP, условную логику на Python и многое другое.
+[Статья на хабр](https://habr.com/ru/articles/939524/)
 
 <div align="center">
   <p><strong>Разработано командой</strong></p>
   <a href="https://save-link.ru" target="_blank">
-    <img src="https://img.shields.io/badge/SaveLink-Разработка-blue?style=for-the-badge&logo=link" alt="SaveLink" />
+    <img src="https://img.shields.io/badge/SaveLink-Тестирование-blue?style=for-the-badge&logo=link" alt="SaveLink" />
   </a>
   <p><a href="https://save-link.ru" target="_blank">save-link.ru</a></p>
 </div>
