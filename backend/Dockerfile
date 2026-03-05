@@ -15,4 +15,4 @@ RUN mkdir -p data
 EXPOSE 8080
 
 # Команда запуска
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD sh -c 'export http_proxy= && export https_proxy= && echo $http_proxy && uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload'

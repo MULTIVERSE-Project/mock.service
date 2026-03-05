@@ -15,7 +15,7 @@ import {
 } from '@ant-design/icons'
 
 const { Sider } = Layout
-const { Title, Text } = Typography
+const { Text } = Typography
 
 const Navigation: React.FC = () => {
   const navigate = useNavigate()
@@ -114,48 +114,44 @@ const Navigation: React.FC = () => {
         zIndex: 100,
       }}
     >
-      {/* Логотип и заголовок */}
-      <div style={{ 
-        height: 80, 
-        margin: '20px 24px', 
-        display: 'flex', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        background: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: '16px',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        padding: '16px',
-        transition: 'all 0.3s ease',
-        cursor: 'pointer',
-      }}
-      onClick={() => navigate('/services')}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'rgba(58, 122, 138, 0.25)'
-        e.currentTarget.style.transform = 'translateY(-2px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-        e.currentTarget.style.transform = 'translateY(0)'
-      }}
+      {/* Логотип SaveLink */}
+      <div
+        className="app-logo"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          margin: '20px 24px 16px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          minHeight: 64,
+        }}
       >
-        <Space direction="vertical" align="center" size={4}>
-          <ApiOutlined style={{ 
-            fontSize: '24px', 
-            color: 'white',
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
-          }} />
-          <Title level={4} style={{ 
-            color: 'white', 
-            margin: 0, 
-            fontSize: '16px',
-            fontWeight: 600,
-            textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-          }}>
-            Mock Service
-          </Title>
-        </Space>
+        <a
+          href="https://save-link.ru/?utm_source=tools&utm_medium=referral&utm_campaign=mock-service&utm_content=logo"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            textDecoration: 'none',
+          }}
+        >
+          <img
+            src="/images/logo-savelink.png"
+            alt="SaveLink"
+            className="logo-full"
+            style={{ height: 32, maxWidth: 180, objectFit: 'contain' }}
+          />
+          <img
+            src="/images/logo-savelink-small-transparent.png"
+            alt="SaveLink"
+            className="logo-small"
+            style={{ height: 36, width: 36, objectFit: 'contain', display: 'none' }}
+          />
+        </a>
       </div>
 
       {/* Основное меню */}
@@ -221,7 +217,7 @@ const Navigation: React.FC = () => {
           className="custom-menu"
         />
         
-        {/* Версия и информация о команде */}
+        {/* Версия */}
         <div style={{ 
           textAlign: 'center', 
           marginTop: '16px',
@@ -229,52 +225,7 @@ const Navigation: React.FC = () => {
           color: 'rgba(255, 255, 255, 0.5)',
           fontSize: '11px'
         }}>
-          <div style={{ marginBottom: '4px' }}>
-            v1.0.0
-          </div>
-          <div style={{ 
-            marginTop: '8px',
-            padding: '8px 12px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(58, 122, 138, 0.25)'
-            e.currentTarget.style.transform = 'translateY(-1px)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-            e.currentTarget.style.transform = 'translateY(0)'
-          }}
-          onClick={() => window.open('https://save-link.ru', '_blank')}
-          >
-            <div style={{ 
-              color: 'rgba(255, 255, 255, 0.8)', 
-              fontSize: '10px',
-              fontWeight: 600,
-              marginBottom: '2px'
-            }}>
-              Разработано командой
-            </div>
-            <div style={{ 
-              color: 'rgba(255, 255, 255, 0.9)', 
-              fontSize: '12px',
-              fontWeight: 700,
-              textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-            }}>
-              SaveLink
-            </div>
-            <div style={{ 
-              color: 'rgba(255, 255, 255, 0.6)', 
-              fontSize: '9px',
-              marginTop: '2px'
-            }}>
-              save-link.ru
-            </div>
-          </div>
+          v1.0.0
         </div>
       </div>
 

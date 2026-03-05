@@ -12,7 +12,8 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import MonacoEditor from '@monaco-editor/react'
-import { MockService, MockServiceCreate, ConditionalResponse } from '@/types'
+import ResizableMonacoEditor from './ResizableMonacoEditor'
+import { MockServiceCreate, ConditionalResponse } from '@/types'
 import { MockServiceAPI } from '@/api/mockService'
 import { useServerInfo } from '@/contexts/ServerContext'
 import { copyWithNotification } from '@/utils/clipboard'
@@ -115,6 +116,56 @@ const MockServiceForm: React.FC = () => {
       return true
     } catch {
       return false
+    }
+  }
+
+  const validateXML = (text: string): boolean => {
+    if (!text.trim()) return true
+    try {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(text, 'application/xml')
+      const errorNode = doc.querySelector('parsererror')
+      return !errorNode
+    } catch {
+      return false
+    }
+  }
+
+  const formatXML = (text: string): string => {
+    if (!text.trim()) return ''
+    try {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(text, 'application/xml')
+      const errorNode = doc.querySelector('parsererror')
+      if (errorNode) return text // Возвращаем как есть если не XML
+      
+      const serializer = new XMLSerializer()
+      const xmlString = serializer.serializeToString(doc)
+      
+      // Простое форматирование XML
+      let formatted = ''
+      let indent = 0
+      const lines = xmlString.split('><')
+      
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i]
+        if (i > 0) line = '<' + line
+        if (i < lines.length - 1) line = line + '>'
+        
+        if (line.match(/<\/.+>/)) {
+          indent--
+        }
+        
+        formatted += '  '.repeat(Math.max(0, indent)) + line + '\n'
+        
+        if (line.match(/<[^/].+[^/]>/)) {
+          indent++
+        }
+      }
+      
+      return formatted.trim()
+    } catch {
+      return text // Возвращаем как есть если ошибка
     }
   }
 
@@ -225,21 +276,27 @@ const MockServiceForm: React.FC = () => {
       }))
       setConditionalResponses(responses)
       
-      // Форматируем JSON для отображения
-      setStaticResponse(formatJSON(mockService.static_response || ''))
-      
-      // Определяем тип синтаксиса на основе содержимого ответа
+      // Определяем тип синтаксиса: приоритет у service_type из API, fallback — эвристика по содержимому
+      const serviceType = mockService.service_type || 'rest'
       const responseContent = mockService.static_response || ''
-      if (responseContent.includes('<?xml') || responseContent.includes('<soap:')) {
-        setSyntaxType('xml')
-      } else {
-        setSyntaxType('json')
-      }
+      const isSOAP = serviceType === 'soap' ||
+        responseContent.includes('<?xml') ||
+        responseContent.includes('<soap:') ||
+        responseContent.includes('<soapenv:')
+      
+      setSyntaxType(isSOAP ? 'xml' : 'json')
+      
+      // Форматируем ответ в зависимости от типа (JSON или XML)
+      const rawResponse = mockService.static_response || ''
+      setStaticResponse(isSOAP ? formatXML(rawResponse) || rawResponse : formatJSON(rawResponse))
       
       // Преобразуем headers объект в массив для таблицы и JSON
+      const defaultHeaders = isSOAP
+        ? [{ key: 'Content-Type', value: 'text/xml; charset=utf-8' }, { key: 'SOAPAction', value: '""' }]
+        : [{ key: 'Content-Type', value: 'application/json' }]
       const headersArray = mockService.static_headers 
         ? Object.entries(mockService.static_headers).map(([key, value]) => ({ key, value: String(value) }))
-        : [{ key: 'Content-Type', value: 'application/json' }]
+        : defaultHeaders
       setStaticHeaders(headersArray)
       
       // Инициализируем JSON заголовки
@@ -391,6 +448,7 @@ const MockServiceForm: React.FC = () => {
   }
 
   const convertToSOAPService = () => {
+    form.setFieldsValue({ service_type: 'soap' })
     // Установка SOAP заголовков
     const soapHeaders = [
       { key: 'Content-Type', value: 'text/xml; charset=utf-8' },
@@ -420,6 +478,7 @@ const MockServiceForm: React.FC = () => {
   }
 
   const convertToRESTService = () => {
+    form.setFieldsValue({ service_type: 'rest' })
     // Установка REST заголовков
     const restHeaders = [
       { key: 'Content-Type', value: 'application/json' }
@@ -1152,44 +1211,46 @@ limit = query.get('limit', 10)
                   </Space>
                 </div>
               }>
-                <div style={{ border: '1px solid #d9d9d9', borderRadius: '6px' }}>
-                  <MonacoEditor
-                    height="200px"
-                    language={syntaxType}
-                    theme="vs"
-                    value={staticResponse}
-                    onChange={(value) => setStaticResponse(value || '')}
-                    options={{
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      wordWrap: 'on',
-                      fontSize: 12,
-                      lineNumbers: 'on',
-                      folding: true,
-                      formatOnPaste: true,
-                      formatOnType: true
-                    }}
-                  />
-                </div>
+                <ResizableMonacoEditor
+                  height="200px"
+                  language={syntaxType}
+                  theme="vs"
+                  value={staticResponse}
+                  onChange={(value) => setStaticResponse(value || '')}
+                  minHeight={120}
+                  maxHeight={600}
+                />
                 <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text type="secondary" style={{ fontSize: '12px' }}>
                     {syntaxType === 'xml' ? (
-                      <Text style={{ color: '#25606f' }}>📝 XML содержимое</Text>
+                      validateXML(staticResponse) ? (
+                        <Text type="success">✓ Корректный XML</Text>
+                      ) : staticResponse.trim() ? (
+                        <Text type="danger">✗ Некорректный XML</Text>
+                      ) : (
+                        <Text style={{ color: '#25606f' }}>📝 XML содержимое</Text>
+                      )
                     ) : validateJSON(staticResponse) ? (
                       <Text type="success">✓ Корректный JSON</Text>
-                    ) : (
+                    ) : staticResponse.trim() ? (
                       <Text type="danger">✗ Некорректный JSON</Text>
+                    ) : (
+                      <Text style={{ color: '#25606f' }}>📝 JSON содержимое</Text>
                     )}
                   </Text>
-                  {syntaxType === 'json' && (
-                    <Button 
-                      size="small" 
-                      type="link" 
-                      onClick={() => setStaticResponse(formatJSON(staticResponse))}
-                    >
-                      Форматировать
-                    </Button>
-                  )}
+                  <Button 
+                    size="small" 
+                    type="link" 
+                    onClick={() => {
+                      if (syntaxType === 'xml') {
+                        setStaticResponse(formatXML(staticResponse))
+                      } else {
+                        setStaticResponse(formatJSON(staticResponse))
+                      }
+                    }}
+                  >
+                    Форматировать
+                  </Button>
                 </div>
               </Form.Item>
 
@@ -1544,19 +1605,17 @@ limit = query.get('limit', 10)
               </Row>
 
               <Form.Item label="Код для подготовки переменных">
-                <div style={{ border: '1px solid #d9d9d9', borderRadius: 6 }}>
-                  <MonacoEditor
-                    height="200px"
-                    language="python"
-                    value={conditionCode}
-                    onChange={(value) => setConditionCode(value || '')}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 14,
-                      wordWrap: 'on'
-                    }}
-                  />
-                </div>
+                <ResizableMonacoEditor
+                  height="200px"
+                  language="python"
+                  value={conditionCode}
+                  onChange={(value) => setConditionCode(value || '')}
+                  minHeight={150}
+                  maxHeight={800}
+                  options={{
+                    fontSize: 14
+                  }}
+                />
                 <Text type="secondary" style={{ fontSize: '12px' }}>
                   Доступные переменные: request, headers, query, body, method, path, path_params, json
                   {pathParams.length > 0 && (
@@ -1663,40 +1722,47 @@ limit = query.get('limit', 10)
                         <>
                           <Text strong>Ответ:</Text>
                       <div style={{ marginTop: 8 }}>
-                        <div style={{ border: '1px solid #d9d9d9', borderRadius: '6px' }}>
-                          <MonacoEditor
-                            height="120px"
-                            language={isSOAPService() ? "xml" : "json"}
-                            theme="vs"
-                            value={response.response}
-                            onChange={(value) => updateConditionalResponse(index, 'response', value || '')}
-                            options={{
-                              minimap: { enabled: false },
-                              scrollBeyondLastLine: false,
-                              wordWrap: 'on',
-                              fontSize: 12,
-                              lineNumbers: 'on',
-                              folding: false,
-                              formatOnPaste: true,
-                              formatOnType: true
-                            }}
-                          />
-                        </div>
+                        <ResizableMonacoEditor
+                           height="120px"
+                           language={isSOAPService() ? "xml" : "json"}
+                           theme="vs"
+                           value={response.response || ''}
+                           onChange={(value) => updateConditionalResponse(index, 'response', value || '')}
+                           minHeight={100}
+                           maxHeight={500}
+                           options={{
+                             folding: false
+                           }}
+                         />
                         <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text type="secondary" style={{ fontSize: '12px' }}>
                             {isSOAPService() ? (
-                              response.response && <Text style={{ color: '#25606f' }}>📝 XML содержимое</Text>
+                              response.response && validateXML(response.response) ? (
+                                <Text type="success">✓ Корректный XML</Text>
+                              ) : response.response && response.response.trim() ? (
+                                <Text type="danger">✗ Некорректный XML</Text>
+                              ) : response.response ? (
+                                <Text style={{ color: '#25606f' }}>📝 XML содержимое</Text>
+                              ) : null
                             ) : response.response && validateJSON(response.response) ? (
                               <Text type="success">✓ Корректный JSON</Text>
-                            ) : response.response ? (
+                            ) : response.response && response.response.trim() ? (
                               <Text type="danger">✗ Некорректный JSON</Text>
+                            ) : response.response ? (
+                              <Text style={{ color: '#25606f' }}>📝 JSON содержимое</Text>
                             ) : null}
                           </Text>
-                          {response.response && !isSOAPService() && (
+                          {response.response && (
                             <Button 
                               size="small" 
                               type="link" 
-                              onClick={() => updateConditionalResponse(index, 'response', formatJSON(response.response || ''))}
+                              onClick={() => {
+                                if (isSOAPService()) {
+                                  updateConditionalResponse(index, 'response', formatXML(response.response || ''))
+                                } else {
+                                  updateConditionalResponse(index, 'response', formatJSON(response.response || ''))
+                                }
+                              }}
                             >
                               Форматировать
                             </Button>
@@ -1826,30 +1892,20 @@ limit = query.get('limit', 10)
                             </>
                           ) : (
                             <>
-                              <div style={{ border: '1px solid #d9d9d9', borderRadius: '6px' }}>
-                                <MonacoEditor
-                                  height="200px"
-                                  language="json"
-                                  theme="vs"
-                                  value={conditionalHeadersJson[index] || '{\n  "Content-Type": "application/json"\n}'}
-                                  onChange={(value) => {
-                                    setConditionalHeadersJson(prev => ({ 
-                                      ...prev, 
-                                      [index]: value || '{\n  "Content-Type": "application/json"\n}' 
-                                    }))
-                                  }}
-                                  options={{
-                                    minimap: { enabled: false },
-                                    scrollBeyondLastLine: false,
-                                    wordWrap: 'on',
-                                    fontSize: 12,
-                                    lineNumbers: 'on',
-                                    folding: true,
-                                    formatOnPaste: true,
-                                    formatOnType: true
-                                  }}
-                                />
-                              </div>
+                              <ResizableMonacoEditor
+                                height="200px"
+                                language="json"
+                                theme="vs"
+                                value={conditionalHeadersJson[index] || '{\n  "Content-Type": "application/json"\n}'}
+                                onChange={(value) => {
+                                  setConditionalHeadersJson(prev => ({ 
+                                    ...prev, 
+                                    [index]: value || '{\n  "Content-Type": "application/json"\n}' 
+                                  }))
+                                }}
+                                minHeight={120}
+                                maxHeight={400}
+                              />
                               <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Text type="secondary" style={{ fontSize: '12px' }}>
                                   {validateJSON(conditionalHeadersJson[index] || '{}') ? (
@@ -1946,4 +2002,4 @@ limit = query.get('limit', 10)
   )
 }
 
-export default MockServiceForm 
+export default MockServiceForm

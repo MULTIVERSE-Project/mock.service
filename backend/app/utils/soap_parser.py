@@ -25,8 +25,11 @@ class SOAPParser:
             Optional[str]: Имя метода или None если не найден
         """
         try:
+            # Получаем заголовки без учёта регистра (HTTP headers case-insensitive)
+            headers_lower = {k.lower(): v for k, v in headers.items()} if headers else {}
+            
             # 1. ПРИОРИТЕТ: Проверяем параметр action в Content-Type
-            content_type = headers.get('content-type', '')
+            content_type = headers_lower.get('content-type', '')
             if 'action=' in content_type.lower():
                 # Ищем параметр action в Content-Type
                 action_match = re.search(r'action=["\']([^"\']+)["\']', content_type, re.IGNORECASE)
@@ -42,7 +45,7 @@ class SOAPParser:
                         return method_name
             
             # 2. Проверяем заголовок SOAPAction (стандартный способ)
-            soap_action = headers.get('soapaction', '').strip('"').strip("'")
+            soap_action = headers_lower.get('soapaction', '').strip('"').strip("'")
             if soap_action:
                 method_name = SOAPParser._extract_method_from_action(soap_action)
                 if method_name:
@@ -332,9 +335,10 @@ class SOAPParser:
         Returns:
             bool: True если это SOAP запрос
         """
-        # Проверяем заголовки
-        content_type = headers.get('content-type', '').lower()
-        soap_action = headers.get('soapaction', '').lower()
+        # Проверяем заголовки (case-insensitive)
+        headers_lower = {k.lower(): v for k, v in headers.items()} if headers else {}
+        content_type = headers_lower.get('content-type', '').lower()
+        soap_action = headers_lower.get('soapaction', '').lower()
         
         # Проверяем наличие SOAP индикаторов в заголовках
         soap_header_indicators = [

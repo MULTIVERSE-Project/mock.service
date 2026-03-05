@@ -3,6 +3,9 @@ from sqlalchemy import select, delete, update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Tuple
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 from app.models.mock_service import MockService, ServiceType
 from app.schemas.mock_service import MockServiceCreate, MockServiceUpdate
 from app.utils.path_parser import path_parser
@@ -88,106 +91,147 @@ class MockServiceService:
         fallback_service = None
         fallback_params = {}
         
-        # Ищем сервис, который поддерживает данный метод и путь
+        # Извлекаем SOAP метод один раз (для SOAP сервисов)
+        soap_method = None
+        if headers:
+            soap_method = SOAPParser.extract_soap_method(headers, body)
+        
+        path_normalized = path.rstrip('/') or '/'
+        soap_on_path = [s.name for s in services if s.service_type == ServiceType.SOAP and (
+            path_parser.extract_parameters(s.path, path_normalized) is not None or
+            path_parser.extract_parameters(s.path.rstrip('/') or '/', path_normalized) is not None
+        )]
+        logger.info(f"Поиск mock: path={path_normalized!r}, soap_method={soap_method!r}, SOAP на пути: {soap_on_path}")
+        
+        # Собираем кандидатов: сервисы с совпадением пути и метода
+        soap_candidates = []  # (service, path_params, is_exact_match)
+        rest_match = None
+        fallback_service = None
+        fallback_params = {}
+        
         for service in services:
             # Проверяем метод
             if method.upper() not in [m.upper() for m in service.methods]:
                 continue
             
-            # Проверяем путь с поддержкой параметров
-            path_params = path_parser.extract_parameters(service.path, path)
+            # Проверяем путь (пробуем с и без trailing slash для совместимости)
+            path_params = path_parser.extract_parameters(service.path, path_normalized)
+            if path_params is None:
+                path_params = path_parser.extract_parameters(service.path.rstrip('/') or '/', path_normalized)
+            if path_params is None and path != path_normalized:
+                path_params = path_parser.extract_parameters(service.path, path)
             if path_params is None:
                 continue
             
-            # Для SOAP сервисов дополнительно проверяем метод в заголовках HTTP
-            if service.service_type == ServiceType.SOAP and headers:
-                soap_method = SOAPParser.extract_soap_method(headers, body)
+            if service.service_type == ServiceType.SOAP:
                 if soap_method:
-                    # Проверяем соответствие SOAP метода с именем сервиса (улучшенная логика)
+                    is_exact = self._matches_soap_service_exact(service.name, soap_method)
+                    if is_exact:
+                        return service, path_params  # Точное совпадение — сразу возвращаем
                     if self._matches_soap_service(service.name, soap_method):
-                        return service, path_params
-                    else:
-                        # Если SOAP метод найден, но не соответствует имени сервиса, 
-                        # продолжаем поиск (не строгая проверка)
-                        continue
+                        soap_candidates.append((service, path_params, False))
                 else:
-                    # Если SOAP метод не найден, возвращаем сервис (fallback)
-                    # но только если нет других подходящих SOAP сервисов
-                    # Сохраняем как fallback вариант
                     fallback_service = service
                     fallback_params = path_params
             
-            # Для REST сервисов возвращаем сервис
             elif service.service_type == ServiceType.REST:
-                return service, path_params
+                rest_match = (service, path_params)
         
-        # Если точное соответствие не найдено, возвращаем fallback вариант для SOAP
+        # Для REST — возвращаем первый подходящий
+        if rest_match:
+            return rest_match
+        
+        # Для SOAP — если есть кандидаты, берём первого (частичное совпадение)
+        if soap_candidates:
+            return soap_candidates[0][0], soap_candidates[0][1]
+        
         if fallback_service:
             return fallback_service, fallback_params
         
+        # Диагностика при 404
+        soap_services = [s for s in services if s.service_type == ServiceType.SOAP]
+        if soap_services:
+            logger.warning(f"SOAP 404: path={path!r}, soap_method={soap_method!r}. "
+                          f"Доступные пути: {[(s.path, s.name) for s in soap_services]}")
+        
         return None, {}
     
-    def _matches_soap_service(self, service_name: str, soap_method: str) -> bool:
+    def _normalize_soap_method_for_match(self, soap_method: str) -> List[str]:
         """
-        Проверяет соответствие SOAP метода имени сервиса
-        Используется улучшенная логика сопоставления
-        
-        Args:
-            service_name: Имя mock сервиса
-            soap_method: Имя SOAP метода из запроса
-            
-        Returns:
-            bool: True если метод соответствует сервису
+        Возвращает варианты имени метода для сопоставления.
+        SOAP action часто содержит суффикс Request/Response (имя сообщения),
+        а WSDL operation — только имя операции (getHealthGroup).
+        """
+        if not soap_method:
+            return []
+        s = soap_method.strip().lower()
+        variants = [s]
+        for suffix in ('request', 'response', 'in', 'out'):
+            if s.endswith(suffix) and len(s) > len(suffix):
+                base = s[:-len(suffix)].rstrip('_')
+                if base:
+                    variants.append(base)
+        return variants
+
+    def _matches_soap_service_exact(self, service_name: str, soap_method: str) -> bool:
+        """
+        Строгое сопоставление: имя метода должно совпадать с операцией в имени сервиса.
+        Учитывает суффиксы Request/Response в SOAP action (getHealthGroupRequest -> getHealthGroup).
         """
         if not service_name or not soap_method:
             return False
         
         service_name_lower = service_name.lower().strip()
-        soap_method_lower = soap_method.lower().strip()
+        soap_variants = self._normalize_soap_method_for_match(soap_method)
         
-        # Простое вхождение метода в имя сервиса
-        if soap_method_lower in service_name_lower:
+        for soap_method_lower in soap_variants:
+            # Точное совпадение
+            if service_name_lower == soap_method_lower:
+                return True
+            
+            # ServiceName_MethodName (например: ProxyService_getHealthGroup)
+            if service_name_lower.endswith(f"_{soap_method_lower}"):
+                return True
+            
+            # MethodName_ServiceName
+            if service_name_lower.startswith(f"{soap_method_lower}_"):
+                return True
+            
+            # ServiceName.MethodName
+            if service_name_lower.endswith(f".{soap_method_lower}"):
+                return True
+            
+            # MethodName.ServiceName
+            if service_name_lower.startswith(f"{soap_method_lower}."):
+                return True
+        
+        return False
+    
+    def _matches_soap_service(self, service_name: str, soap_method: str) -> bool:
+        """
+        Частичное сопоставление для fallback (только после проверки exact).
+        Учитывает суффиксы Request/Response при сравнении частей.
+        """
+        if not service_name or not soap_method:
+            return False
+        
+        if self._matches_soap_service_exact(service_name, soap_method):
             return True
         
-        # Проверяем паттерны именования:
-        # 1. ServiceName_MethodName
-        if service_name_lower.endswith(f"_{soap_method_lower}"):
-            return True
-        
-        # 2. MethodName_ServiceName  
-        if service_name_lower.startswith(f"{soap_method_lower}_"):
-            return True
-        
-        # 3. ServiceName.MethodName (с точкой)
-        if service_name_lower.endswith(f".{soap_method_lower}"):
-            return True
-        
-        # 4. MethodName.ServiceName
-        if service_name_lower.startswith(f"{soap_method_lower}."):
-            return True
-        
-        # 5. ServiceNameMethodName (без разделителей)
-        if service_name_lower.endswith(soap_method_lower):
-            return True
-        
-        if service_name_lower.startswith(soap_method_lower):
-            return True
-        
-        # 6. Обратная проверка - имя сервиса содержится в методе
-        if service_name_lower in soap_method_lower:
-            return True
-        
-        # 7. Проверяем части имени (разделенные по _ или .)
+        service_name_lower = service_name.lower().strip()
+        soap_variants = self._normalize_soap_method_for_match(soap_method)
         service_parts = re.split(r'[._-]', service_name_lower)
-        soap_parts = re.split(r'[._-]', soap_method_lower)
         
-        # Ищем пересечения в частях
-        for service_part in service_parts:
-            if service_part and len(service_part) > 2:  # Игнорируем слишком короткие части
+        for soap_method_lower in soap_variants:
+            soap_parts = re.split(r'[._-]', soap_method_lower)
+            for service_part in service_parts:
+                if not service_part or len(service_part) < 3:
+                    continue
                 for soap_part in soap_parts:
-                    if soap_part and len(soap_part) > 2:
-                        if service_part == soap_part or service_part in soap_part or soap_part in service_part:
-                            return True
+                    if not soap_part or len(soap_part) < 3:
+                        continue
+                    if service_part == soap_part:
+                        return True
         
         return False
 

@@ -3,12 +3,11 @@
 > **Инструмент для создания и управления mock API эндпоинтами с современным веб-интерфейсом**
 
 Mock Service позволяет быстро создавать имитации API для тестирования, разработки и демонстрации приложений. Поддерживает REST, SOAP, условную логику на Python и многое другое.
-[Статья на хабр](https://habr.com/ru/articles/939524/)
 
 <div align="center">
   <p><strong>Разработано командой</strong></p>
   <a href="https://save-link.ru" target="_blank">
-    <img src="https://img.shields.io/badge/SaveLink-Тестирование-blue?style=for-the-badge&logo=link" alt="SaveLink" />
+    <img src="https://img.shields.io/badge/SaveLink-Разработка-blue?style=for-the-badge&logo=link" alt="SaveLink" />
   </a>
   <p><a href="https://save-link.ru" target="_blank">save-link.ru</a></p>
 </div>
@@ -34,7 +33,7 @@ Mock Service позволяет быстро создавать имитации
 
 ### Требования
 - Docker и Docker Compose
-- Свободные порты 8001 и 8080
+- Свободные порты 3000 и 8080
 
 ### Запуск за 1 минуту
 ```bash
@@ -46,11 +45,11 @@ cd mock-service
 docker-compose up -d
 
 # Откройте браузер
-open http://localhost:8001
+open http://localhost:3000
 ```
 
 ### Доступные адреса
-- **Веб-интерфейс**: http://localhost:8001
+- **Веб-интерфейс**: http://localhost:3000
 - **API документация**: http://localhost:8080/docs
 - **Mock API**: http://localhost:8080
 
