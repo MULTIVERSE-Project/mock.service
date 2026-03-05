@@ -33,7 +33,7 @@ Mock Service позволяет быстро создавать имитации
 
 ### Требования
 - Docker и Docker Compose
-- Свободные порты 3000 и 8080
+- Свободные порты 8001 и 8080
 
 ### Запуск за 1 минуту
 ```bash
@@ -45,11 +45,11 @@ cd mock-service
 docker-compose up -d
 
 # Откройте браузер
-open http://localhost:3000
+open http://localhost:8001
 ```
 
 ### Доступные адреса
-- **Веб-интерфейс**: http://localhost:3000
+- **Веб-интерфейс**: http://localhost:8001
 - **API документация**: http://localhost:8080/docs
 - **Mock API**: http://localhost:8080
 
