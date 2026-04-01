@@ -196,6 +196,74 @@ const MockServiceList: React.FC = () => {
     return groups
   }
 
+  /** Ключ группы для сервиса (совпадает с логикой groupServices). */
+  const getServiceGroupKey = (service: MockService): string =>
+    groupByPrefix ? extractNamePrefix(service.name) : extractBasePath(service.path)
+
+  type GroupStrategyStatus = 'all_proxy' | 'has_conditional' | 'has_mock'
+
+  /**
+   * Состояние стратегий в группе: мок (static) важнее условного, чем прокси.
+   * Считается по полному списку сервисов группы, не по отфильтрованному виду.
+   */
+  const getGroupStrategyStatus = (groupMembers: MockService[]): GroupStrategyStatus => {
+    if (groupMembers.some(s => s.strategy === 'static')) return 'has_mock'
+    if (groupMembers.some(s => s.strategy === 'conditional')) return 'has_conditional'
+    return 'all_proxy'
+  }
+
+  const groupStrategyIndicatorConfig: Record<
+    GroupStrategyStatus,
+    { color: string; title: string; description: string }
+  > = {
+    all_proxy: {
+      color: '#52c41a',
+      title: 'Проксирование',
+      description: 'Все эндпоинты группы работают в режиме проксирования.',
+    },
+    has_conditional: {
+      color: '#faad14',
+      title: 'Условный ответ',
+      description: 'В группе есть эндпоинты с условным ответом (без мока со статикой).',
+    },
+    has_mock: {
+      color: '#ff4d4f',
+      title: 'Мок',
+      description: 'В группе есть эндпоинты со статичным моком.',
+    },
+  }
+
+  const renderGroupStrategyIndicator = (status: GroupStrategyStatus) => {
+    const cfg = groupStrategyIndicatorConfig[status]
+    return (
+      <Tooltip
+        title={
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{cfg.title}</div>
+            <div style={{ fontSize: 12 }}>{cfg.description}</div>
+            <div style={{ fontSize: 11, marginTop: 6, opacity: 0.85 }}>
+              Учитываются все сервисы группы, не только попавшие в поиск и фильтры.
+            </div>
+          </div>
+        }
+      >
+        <span
+          aria-label={cfg.title}
+          style={{
+            display: 'inline-block',
+            width: 11,
+            height: 11,
+            borderRadius: '50%',
+            backgroundColor: cfg.color,
+            boxShadow: `0 0 0 2px ${cfg.color}33`,
+            flexShrink: 0,
+            cursor: 'help',
+          }}
+        />
+      </Tooltip>
+    )
+  }
+
   const loadServices = async () => {
     try {
       setLoading(true)
@@ -830,7 +898,10 @@ const MockServiceList: React.FC = () => {
         </Card>
       ) : (groupByEndpoint || groupByPrefix) ? (
         <div>
-          {Object.entries(groupServices(filteredServices)).map(([basePath, groupedServices]) => (
+          {Object.entries(groupServices(filteredServices)).map(([basePath, groupedServices]) => {
+            const fullGroupServices = services.filter(s => getServiceGroupKey(s) === basePath)
+            const groupStrategyStatus = getGroupStrategyStatus(fullGroupServices)
+            return (
             <Card key={basePath} style={{ marginBottom: 16 }}>
               <Collapse
                 activeKey={expandedGroups.has(basePath) ? ['0'] : []}
@@ -850,7 +921,8 @@ const MockServiceList: React.FC = () => {
                     key: '0',
                     label: (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                        <Space>
+                        <Space align="center">
+                          {renderGroupStrategyIndicator(groupStrategyStatus)}
                           <Tag color={groupByPrefix ? "#722ed1" : "#25606f"}>
                             {groupByPrefix ? `Префикс: ${basePath}` : basePath}
                           </Tag>
@@ -935,7 +1007,8 @@ const MockServiceList: React.FC = () => {
                 ]}
               />
             </Card>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <Card>
