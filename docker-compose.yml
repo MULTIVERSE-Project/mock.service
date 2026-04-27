@@ -15,7 +15,6 @@ services:
       - LOG_MAX_SIZE=50MB
       - LOG_BACKUP_COUNT=10
       - LOG_ROTATION_TIME=1d
-      - VITE_BASE_URL=${BASE_URL:-}
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -36,6 +35,8 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    environment:
+      - VITE_BASE_URL=${BASE_URL:-}
     logging:
       driver: "json-file"
       options:
