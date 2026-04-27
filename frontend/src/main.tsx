@@ -9,7 +9,7 @@ import 'antd/dist/reset.css'
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ConfigProvider locale={ruRU}>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.VITE_BASE_PATH || "/"}>
         <App />
       </BrowserRouter>
     </ConfigProvider>
