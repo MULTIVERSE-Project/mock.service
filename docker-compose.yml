@@ -1,9 +1,8 @@
 services:
   backend:
     build: ./backend
-    container_name: mock-service-backend
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     volumes:
       - ./backend/data:/app/data
       - ./backend:/app
@@ -31,9 +30,8 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: mock-service-frontend
-    ports:
-      - "8002:80"
+    expose:
+      - "80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -54,7 +52,3 @@ volumes:
     driver: local
   logs:
     driver: local
-
-networks:
-  default:
-    name: mock-service-network 
